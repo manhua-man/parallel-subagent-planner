@@ -19,41 +19,42 @@ Use this skill when you need to run multiple independent subagents in true paral
 - Python 3.10+
 - The parallel-subagent-planner repo cloned or the modules importable
 
-## Numbered Steps (Concrete Files First)
+## Numbered Steps
 
-1. **Load the planner** (use these exact files)
+1. **Load the planner**
    ```python
-   from planner.task_decomposer import TaskDecomposer
-   from planner.subagent_spawner import SubagentSpawner
-   from planner.result_aggregator import ResultAggregator
-   # Reference: src/planner/task_decomposer.py, src/planner/subagent_spawner.py, src/planner/result_aggregator.py
+   from planner import TaskDecomposer, SubagentSpawner, ResultAggregator
    ```
 
-2. **Decompose the goal** (see task_decomposer.py lines 40-120 for _decompose_phased_project / _decompose_code_review)
+2. **Decompose the goal**
    ```python
    decomposer = TaskDecomposer(max_concurrent=3)
    tasks = decomposer.decompose(
        goal="Your high-level goal here",
-       context="See docs/architecture.md + examples/parallel_code_review.py for full context"
+       context="Full durable context, file paths, constraints, reference to previous work"
    )
    groups = decomposer.get_execution_groups()
-   # Output will reference concrete files: task_decomposer.py, architecture.md, parallel_code_review.py
    ```
 
 3. **Spawn in parallel batches**
    ```python
-   spawner = SubagentSpawner(delegate_fn=delegate_task)
+   spawner = SubagentSpawner(delegate_fn=delegate_task)  # real delegate_task in Hermes
    for group in groups:
-       results = spawner.spawn_parallel(group, parent_context="See src/planner/ and docs/")
+       results = spawner.spawn_parallel(group, parent_context=...)
    ```
 
-4. **Aggregate + Verify** (see result_aggregator.py)
+4. **Aggregate + Verify (mandatory)**
    ```python
    aggregator = ResultAggregator()
-   # Always verify using: terminal("ls ..."), terminal("gh repo view"), read_file on reported paths
+   for task, result in ...:
+       aggregator.add(task.id, task.goal, result["summary"], artifacts=...)
+       # Always verify side effects with terminal/file tools
+       aggregator.verify(task.id, verified=True, notes="Confirmed via ls/gh/...")
+   print(aggregator.final_report())
    ```
 
-5. **Persist only durable facts** via memory tool.
+5. **Persist durable facts**
+   Use memory tool for cross-session facts discovered during parallel runs. Do NOT save task progress.
 
 ## Pitfalls
 - Subagents have ZERO memory of parent conversation — all context must be explicit
